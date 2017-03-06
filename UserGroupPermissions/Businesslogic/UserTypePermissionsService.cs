@@ -97,46 +97,46 @@
             {
 
                 // Variables.
+                var nl = System.Environment.NewLine;
                 var userId = user.Id;
                 var userTypeId = user.UserType.Id;
-                var user2NodeBaseQuery = new Sql()
-                    .Select("userId", "nodeId", "permission")
-                    .From("umbracoUser2NodePermission")
-                    .Where("userId = @0", userId);
-                var userTypePermissionsBaseQuery = new Sql()
-                    .Select("*")
-                    .From("UserTypePermissions")
-                    .Where("userTypeId = @0", userTypeId);
-                var nodesBaseQuery = new Sql()
-                    .Select("id")
-                    .From("umbracoNode");
-                var user2Node = _sqlHelper.Query<User2NodePermissionDto>(user2NodeBaseQuery);
-                var userTypePermissions = _sqlHelper.Query<UserTypePermissionRow>(userTypePermissionsBaseQuery);
-                var nodes = _sqlHelper.Query<NodeDto>(nodesBaseQuery);
 
 
-                // Get the nodes that need permissions assigned.
-                var nodesForType = userTypePermissions.Join(nodes,
-                    type => type.NodeId,
-                    node => node.NodeId,
-                    (x, y) => new { type = x, node = y });
+                // Select all user type permissions.
+                var baseQuery = new Sql()
+                    .Select("UserTypePermissions.NodeID, UserTypePermissions.PermissionId")
+                    .From("UserTypePermissions");
+
+                // Join user type permissions with user permissions.
+                var permissionMappingQuery = baseQuery.LeftOuterJoin("umbracoUser2NodePermission")
+                    .On(new[]
+                    {
+                        "UserTypePermissions.NodeId = umbracoUser2NodePermission.nodeId",
+                        "AND UserTypePermissions.PermissionId = umbracoUser2NodePermission.permission",
+                        "AND umbracoUser2NodePermission.userId = @0"
+                    }.JoinStrings(nl), userId);
 
 
-                // Get the existing permissions associated with specified nodes.
-                var nodesWithPermissions = nodesForType.GroupJoin(user2Node,
-                    x => new { x.node.NodeId, Permission = x.type.PermissionId, UserId = userId },
-                    x => new { x.NodeId, Permission = x.Permission, x.UserId },
-                    (x, y) => new { x.type, x.node, association = y.FirstOrDefault() });
+                // Only include results matching the user type and that do not yet have a node
+                // permission mapping for the user.
+                var filteredMappingQuery = permissionMappingQuery.Where(new[]
+                    {
+                        "UserTypePermissions.UserTypeId = @0",
+                        "AND umbracoUser2NodePermission.userId IS NULL"
+                    }.JoinStrings(nl), userTypeId);
+
+
+                // Query for the new permissions.
+                var newPermissionResults = _sqlHelper.Query<UserTypePermissionRow>(filteredMappingQuery);
 
 
                 // Only select the new permissions that haven't been assigned yet.
-                var newPermissions = nodesWithPermissions
-                    .Where(x => x.type.UserTypeId == userTypeId && x.association == null)
+                var newPermissions = newPermissionResults
                     .Select(x => new User2NodePermissionDto
                     {
                         UserId = userId,
-                        NodeId = x.type.NodeId,
-                        Permission = x.type.PermissionId
+                        NodeId = x.NodeId,
+                        Permission = x.PermissionId
                     }).ToArray();
 
 

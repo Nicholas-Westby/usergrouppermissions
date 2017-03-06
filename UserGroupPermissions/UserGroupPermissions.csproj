@@ -303,6 +303,7 @@
     <Compile Include="Events\InstallLanguagesKeys.cs" />
     <Compile Include="Events\CreateDatabaseTables.cs" />
     <Compile Include="Events\UserSaved.cs" />
+    <Compile Include="ExtensionMethods\StringCollectionExtensions.cs" />
     <Compile Include="ExtensionMethods\UserExtensions.cs" />
     <Compile Include="ExtensionMethods\UserTypeExtensions.cs" />
     <Compile Include="MenuActions\UserGroupPermissions.cs" />
